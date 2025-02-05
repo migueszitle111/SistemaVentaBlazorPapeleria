@@ -1,0 +1,225 @@
+@page "/page/venta"
+
+@inject IProductoService _productoServicio;
+@inject IVentaService _ventaServicio;
+@inject ISnackbar _snackBar
+@inject SweetAlertService Swal;
+@inject NavigationManager NavigationManager
+
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-5">
+
+    <MudText Typo="Typo.h5" GutterBottom="true">Punto de cobro</MudText>
+
+    <MudPaper Elevation="3" Class="pa-4" Width="100%">
+        <MudGrid>
+            <MudItem xs="6">
+                <MudSelect T="ProductoDTO" Label="Seleccionar producto" @bind-Value="_productoSeleccionado"
+                           Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var producto in _productos)
+                    {
+                        <MudSelectItem Value="@producto">  
+                            <div style="display: flex; align-items: center;">
+                                <img src="Images/@($"{producto.Nombre}.png")" alt="Producto" style="width: 24px; height: 24px; margin-right: 8px;" />
+                            <span>@($"{producto.Nombre} - {producto.DescripcionCategoria}")</span>
+                            </div>
+                            
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="3">
+                <MudNumericField @bind-Value="_cantidad" Label="Cantidad" Variant="Variant.Outlined" Step="1" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="3">
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    StartIcon="@Icons.Material.Filled.Add" 
+                    Color="Color.Info"
+                    FullWidth="true"
+                    Class="mt-1"
+                    OnClick="AgregarProducto"
+                >Agregar</MudButton>
+            </MudItem>
+
+            <MudItem xs="6">
+            </MudItem>
+            <MudItem xs="3">
+                <MudSelect T="string" Label="Tipo de Pago" Variant="Variant.Outlined" @bind-Value="_venta.TipoPago" Margin="Margin.Dense">
+                    <MudSelectItem Value="@("Efectivo")" />
+                    <MudSelectItem Value="@("Tarjeta")" />
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="3">
+                <MudAlert Severity="Severity.Warning" NoIcon="true" Variant="Variant.Filled"
+                          ContentAlignment="HorizontalAlignment.Center" Dense="true" Class="mt-1">
+                    Total @_venta.TotalTexto
+                    </MudAlert>
+            </MudItem>
+
+            <MudItem xs="12">
+
+                <MudTable Items="@_venta.DetalleVenta" Dense="true" Striped="true" Bordered="true">
+                    <HeaderContent>
+                        <MudTh Style="text-align: center;"></MudTh>
+                        <MudTh Style="text-align: center;">Producto</MudTh>
+                        <MudTh Style="text-align: center;">Cantidad</MudTh>
+                        <MudTh Style="text-align: center;">Precio</MudTh>
+                        <MudTh Style="text-align: center;">Total</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="dvProducto">
+                        <MudTd DataLabel="Imagen" Style="text-align: center; margin: 0;padding: 0; width: 90px;">
+                            @if (dvProducto.IdProducto != null)
+                            {
+                                var producto = _productos.FirstOrDefault(p => p.IdProducto == dvProducto.IdProducto);
+                                if (producto != null)
+                                {
+                                    <img src="Images/@($"{producto.Nombre}.png")" alt="Producto" style="width: 90px; height: auto; display: block; margin: 0 auto; object-fit: contain;" />
+                                }
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Producto" Style="text-align: center;">
+                            @if (dvProducto.IdProducto != null)
+                            {
+                                var producto = _productos.FirstOrDefault(p => p.IdProducto == dvProducto.IdProducto);
+                                if (producto != null)
+                                {
+                                    <span>@($"{producto.Nombre}")</span>
+                                }
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Cantidad" Style="text-align: center;">@dvProducto.Cantidad</MudTd>
+                        <MudTd DataLabel="Precio" Style="text-align: center;">@dvProducto.Precio</MudTd>
+                        <MudTd DataLabel="Total" Style="text-align: center;">@dvProducto.Total</MudTd>
+                        <MudTd DataLabel="" Style="text-align: center;">
+                            <MudFab Color="Color.Error"
+                                    StartIcon="@Icons.Material.Filled.Delete"
+                                    Size="Size.Small"
+                                    IconSize="Size.Small"
+                                    OnClick="@(() => EliminarProducto(dvProducto.IdProducto))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+
+
+
+
+
+            </MudItem>
+
+            <MudItem xs="3" Class="align-self-end">
+                <MudButton Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.MonetizationOn"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Class="mt-1"
+                           OnClick="RegistrarVenta"
+                           Disabled="@botonDesactivado">Pagar</MudButton>
+            </MudItem>
+
+        </MudGrid>
+    </MudPaper>
+
+</MudContainer>
+
+@code {
+    private int _cantidad = 0;
+    VentaDTO _venta = new VentaDTO() 
+    { 
+        TipoPago = "Efectivo" ,
+        DetalleVenta = new List<DetalleVentaDTO>()
+    };
+
+    private ProductoDTO _productoSeleccionado;
+    private bool botonDesactivado = false;
+
+     private List<ProductoDTO> _productos = new List<ProductoDTO>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await _productoServicio.Lista();
+
+        if (response.status)
+        {
+            _productos = (List<ProductoDTO>)response.value!;
+        }
+    }
+
+    private async Task<IEnumerable<ProductoDTO>> BuscarProducto(string valor){
+
+        var response = await _productoServicio.Lista();
+
+        if (response.status)
+        {
+            if (string.IsNullOrEmpty(valor))
+                return new List<ProductoDTO>();
+
+            List<ProductoDTO> lista =(List<ProductoDTO>)response.value!;
+            return lista.FindAll(p => p.Nombre.Contains(valor, StringComparison.InvariantCultureIgnoreCase));
+        }
+        else
+        {
+            return new List<ProductoDTO> ();
+        }
+    }
+
+    private async Task AgregarProducto()
+    {
+        if(_productoSeleccionado != null && _cantidad > 0)
+        {
+            var detalleVenta = new DetalleVentaDTO()
+            {
+                IdProducto = _productoSeleccionado.IdProducto,
+                DescripcionProducto = _productoSeleccionado.Nombre,
+                Cantidad = _cantidad,
+                Precio = _productoSeleccionado.Precio,
+                Total = _cantidad  * _productoSeleccionado.Precio
+            };
+            _venta.DetalleVenta!.Add(detalleVenta);
+
+            _productoSeleccionado = null;
+            _cantidad = 0;
+        }
+
+
+    }
+
+
+    private async Task EliminarProducto(int idproducto)
+    {
+        var productoEliminar = _venta.DetalleVenta.Find(p => p.IdProducto == idproducto);
+        _venta.DetalleVenta.Remove(productoEliminar);
+    }
+
+    private async Task RegistrarVenta()
+    {
+        botonDesactivado = true;
+
+        _venta.Total = _venta.DetalleVenta!.Sum(p => p.Total);
+        _venta.FechaRegistro = DateTime.Now;
+
+        var response = await _ventaServicio.Registrar(_venta);
+
+        if (response.status)
+        {
+            var _ventaCreada = (VentaDTO)response.value!;
+            _venta = new VentaDTO()
+             {
+                 TipoPago = "Efectivo",
+                 DetalleVenta = new List<DetalleVentaDTO>()
+             };
+
+            await Swal.FireAsync("Cobro exitoso", $"Numero de cobro: {_ventaCreada.NumeroDocumento}", "success");
+
+
+        }
+        else
+        {
+            await Swal.FireAsync("Oops...", "No se pudo realizar el pago!", "error");
+        }
+        botonDesactivado = false;
+
+    }
+}
